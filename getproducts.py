@@ -11,7 +11,7 @@ import dotenv
 dotenv.load_dotenv()
 token = str(os.getenv("TOKEN"))
 
-con = sqlite3.connect("products.db")
+con = sqlite3.connect("./products.db")
 cur = con.cursor()
 
 today = datetime.today().strftime("%Y-%m-%d %H:%M:%S")
@@ -214,7 +214,7 @@ def divide_chunks(l, n):
         yield l[i : i + n]
 
 
-con = sqlite3.connect("products.db")
+con = sqlite3.connect("./products.db")
 cur = con.cursor()
 cur.execute("SELECT * FROM products WHERE date=?", (today,))
 

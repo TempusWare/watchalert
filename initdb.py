@@ -1,6 +1,6 @@
 import sqlite3
 
-con = sqlite3.connect("products.db")
+con = sqlite3.connect("./products.db")
 cur = con.cursor()
 cur.execute(
     "CREATE TABLE IF NOT EXISTS products(id, title, url, price, image, notes, date, PRIMARY KEY (url, price))"

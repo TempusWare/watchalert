@@ -60,7 +60,7 @@ async def on_message(message):
 
 
 def addwatch(site, query):
-    con = sqlite3.connect("products.db")
+    con = sqlite3.connect("./products.db")
     cur = con.cursor()
     cur.execute(
         "INSERT OR IGNORE INTO watchlist VALUES(?, ?)",
@@ -75,7 +75,7 @@ def addwatch(site, query):
 
 
 def delwatch(site, query):
-    con = sqlite3.connect("products.db")
+    con = sqlite3.connect("./products.db")
     cur = con.cursor()
     cur.execute(
         "DELETE FROM watchlist WHERE site=? AND query=?",
@@ -90,7 +90,7 @@ def delwatch(site, query):
 
 
 def watchlist():
-    con = sqlite3.connect("products.db")
+    con = sqlite3.connect("./products.db")
     cur = con.cursor()
     cur.execute("SELECT * FROM watchlist")
     list = []
