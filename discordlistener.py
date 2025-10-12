@@ -37,6 +37,7 @@ async def on_message(message):
             site = args[1].lower()
             query = " ".join(args[2:]).lower()
             print([site, query])
+            addwatch(site, query)
             await message.channel.send(
                 "Added watch for site:" + site + " with query:" + query
             )
@@ -46,6 +47,7 @@ async def on_message(message):
             site = args[1].lower()
             query = " ".join(args[2:]).lower()
             print([site, query])
+            delwatch(site, query)
             await message.channel.send(
                 "Removed watch for site:" + site + " with query:" + query
             )
@@ -60,44 +62,51 @@ async def on_message(message):
 
 
 def addwatch(site, query):
-    con = sqlite3.connect("./products.db")
-    cur = con.cursor()
-    cur.execute(
-        "INSERT OR IGNORE INTO watchlist VALUES(?, ?)",
-        (
-            site,
-            query,
-        ),
-    )
-    con.commit()
-    con.close()
+    try:
+        with sqlite3.connect("./products.db") as con:
+            cur = con.cursor()
+            cur.execute(
+                "INSERT OR IGNORE INTO watchlist VALUES(?, ?)",
+                (
+                    site,
+                    query,
+                ),
+            )
+            con.commit()
+    except sqlite3.OperationalError as e:
+        print(e)
     return
 
 
 def delwatch(site, query):
-    con = sqlite3.connect("./products.db")
-    cur = con.cursor()
-    cur.execute(
-        "DELETE FROM watchlist WHERE site=? AND query=?",
-        (
-            site,
-            query,
-        ),
-    )
-    con.commit()
-    con.close()
+    try:
+        with sqlite3.connect("./products.db") as con:
+            cur = con.cursor()
+            cur.execute(
+                "DELETE FROM watchlist WHERE site=? AND query=?",
+                (
+                    site,
+                    query,
+                ),
+            )
+            con.commit()
+    except sqlite3.OperationalError as e:
+        print(e)
     return
 
 
 def watchlist():
-    con = sqlite3.connect("./products.db")
-    cur = con.cursor()
-    cur.execute("SELECT * FROM watchlist")
-    list = []
-    for row in cur.fetchall():
-        list.append((row[0], row[1]))
-    con.close()
-    return list
+    try:
+        with sqlite3.connect("./products.db") as con:
+            cur = con.cursor()
+            cur.execute("SELECT * FROM watchlist")
+            list = []
+            for row in cur.fetchall():
+                list.append((row[0], row[1]))
+            return list
+    except sqlite3.OperationalError as e:
+        print(e)
+    return []
 
 
 client.run(token)
