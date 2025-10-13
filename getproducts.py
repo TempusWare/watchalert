@@ -235,13 +235,22 @@ colours = {
 # Fetch and print each row
 print("New products:\n")
 for row in cur.fetchall():
-    colour = row[7] if colours[row[7]] is not None else "default"
-    embed = discord.Embed(title=row[1], url=row[2], color=colours[colour])
-    embed.add_field(name="Price", value=row[3])
-    embed.add_field(name="Notes", value=row[5])
-    # embed.set_author(name=row[7])
-    if type(row[4]) == str and len(row[4]) > 1:
-        embed.set_thumbnail(url=row[4])
+    title = row[1]
+    url = row[2]
+    price = row[3]
+    image = row[4]
+    notes = row[5]
+    site = row[7]
+
+    colour = site if colours[site] is not None else "default"
+
+    embed = discord.Embed(title=title, url=url, color=colours[colour])
+    embed.add_field(name="Price", value=price)
+    embed.add_field(name="Notes", value=notes)
+    embed.set_footer(text=site)
+    if type() == str and len(image) > 1:
+        embed.set_thumbnail(url=image)
+
     embeds.append(embed)
 
 con.close()
