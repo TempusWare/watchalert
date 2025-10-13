@@ -6,6 +6,8 @@ import urllib.parse
 from datetime import datetime
 import discord
 import dotenv
+from bs4 import BeautifulSoup
+
 
 dotenv.load_dotenv()
 token = str(os.getenv("TOKEN"))
@@ -16,6 +18,7 @@ colours = {
     "cashconverters": discord.Colour.from_rgb(255, 217, 18),
     "salvos": discord.Colour.from_rgb(255, 40, 62),
     "worldofbooks": discord.Colour.from_rgb(48, 132, 74),
+    "surugaya": discord.Colour.from_rgb(29, 32, 136),
     "default": discord.Colour.from_rgb(255, 255, 255),
 }
 
@@ -193,6 +196,75 @@ def scrape_salvos(query: str) -> list:
     return data_insert
 
 
+def scrape_surugaya(query: str) -> list:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0",
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "en-US,en;q=0.5",
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        "Sec-GPC": "1",
+        "Connection": "keep-alive",
+        "Upgrade-Insecure-Requests": "1",
+        "Sec-Fetch-Dest": "document",
+        "Sec-Fetch-Mode": "navigate",
+        "Sec-Fetch-Site": "cross-site",
+        "Priority": "u=0, i",
+        # Requests doesn't support trailers
+        # 'TE': 'trailers',
+    }
+
+    params = {
+        "keyword": query,
+        "btn_search": "",
+        "sort": "updated_date_desc",
+        # "in_stock": "t",
+    }
+
+    response = requests.get(
+        "https://www.suruga-ya.com/en/products",
+        params=params,
+        headers=headers,
+    )
+
+    data_response = response.text
+
+    data_insert = []
+
+    soup = BeautifulSoup(data_response, "html.parser")
+
+    for i in soup.select("div.item"):
+        price = (
+            i.find("div", class_="price_product").findChildren()[0].get_text().strip()
+        )
+
+        if price == "Out of stock":
+            continue
+
+        image = (
+            i.find("img", class_="img-fluid")["src"]
+            if i.find("img", class_="img-fluid")["src"]
+            != "/themes/surugaya_global/images/products/no_photo.jpg"
+            else "https://www.suruga-ya.com/themes/surugaya_global/images_light/products/no_photo.jpg.webp"
+        )
+
+        item = (
+            i.find("a")["data-product-id"],
+            i.find("h3", class_="title_product").get_text().strip(),
+            "https://www.suruga-ya.com" + i.find("a")["href"],
+            price,
+            image,
+            i.find("p", class_="message").get_text().strip() or "",
+            today,
+            "surugaya",
+        )
+
+        print(item)
+
+        data_insert.append(item)
+
+    return data_insert
+
+
 def scrape_link(site: str, query: str) -> list:
     match site:
         case "cashconverters":
@@ -201,6 +273,8 @@ def scrape_link(site: str, query: str) -> list:
             return scrape_worldofbooks(query)
         case "salvos":
             return scrape_salvos(query)
+        case "surugaya":
+            return scrape_surugaya(query)
         case _:
             print("Uh oh!")
             return []
@@ -223,7 +297,6 @@ def watch():
 
 
 watch()
-
 
 ### Send to Discord
 
