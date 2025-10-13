@@ -68,9 +68,10 @@ def scrape_link(site: str, query: str):
                     i["AbsoluteImageUrl"],
                     i["StoreNameWithState"],
                     today,
+                    site,
                 )
 
-                print(item)
+                # print(item)
 
                 data_insert.append(item)
 
@@ -122,9 +123,10 @@ def scrape_link(site: str, query: str):
                     i["imageURL"],
                     " / ".join((author, bindingType, productType)),
                     today,
+                    site,
                 )
 
-                print(item)
+                # print(item)
 
                 data_insert.append(item)
 
@@ -178,9 +180,10 @@ def scrape_link(site: str, query: str):
                     + " / "
                     + " ".join(re.split("\s+", i["desc"], flags=re.UNICODE)),
                     today,
+                    site,
                 )
 
-                print(item)
+                # print(item)
 
                 data_insert.append(item)
                 insert_into_db(data_insert)
@@ -192,7 +195,9 @@ def scrape_link(site: str, query: str):
 
 
 def insert_into_db(data):
-    cur.executemany("INSERT OR IGNORE INTO products VALUES(?, ?, ?, ?, ?, ?, ?)", data)
+    cur.executemany(
+        "INSERT OR IGNORE INTO products VALUES(?, ?, ?, ?, ?, ?, ?, ?)", data
+    )
     con.commit()
 
 
@@ -220,12 +225,21 @@ cur.execute("SELECT * FROM products WHERE date=?", (today,))
 
 embeds = []
 
+colours = {
+    "cashconverters": discord.Colour.from_rgb(255, 217, 18),
+    "salvos": discord.Colour.from_rgb(255, 40, 62),
+    "worldofbooks": discord.Colour.from_rgb(48, 132, 74),
+    "default": discord.Colour.from_rgb(255, 255, 255),
+}
+
 # Fetch and print each row
 print("New products:\n")
 for row in cur.fetchall():
-    embed = discord.Embed(title=row[1], url=row[2])
+    colour = row[7] if colours[row[7]] is not None else "default"
+    embed = discord.Embed(title=row[1], url=row[2], color=colours[colour])
     embed.add_field(name="Price", value=row[3])
     embed.add_field(name="Notes", value=row[5])
+    # embed.set_author(name=row[7])
     if type(row[4]) == str and len(row[4]) > 1:
         embed.set_thumbnail(url=row[4])
     embeds.append(embed)
