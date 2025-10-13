@@ -32,7 +32,7 @@ async def on_message(message):
 
     match args[0]:
         case "!addwatch":
-            if len(args) < 2:
+            if len(args) < 3:
                 return
             site = args[1].lower()
             query = " ".join(args[2:]).lower()
@@ -51,6 +51,22 @@ async def on_message(message):
             await message.channel.send(
                 "Removed watch for site:" + site + " with query:" + query
             )
+        case "!addwatches":
+            if len(args) < 3:
+                return
+            site = args[1].lower()
+            query = " ".join(args[2:]).lower()
+            queries = query.split(",")
+            if len(queries) > 1:
+                print([site, queries])
+                for q in queries:
+                    addwatch(site, q.strip())
+                await message.channel.send(
+                    "Added watch for site:"
+                    + site
+                    + " with queries:"
+                    + ",".join(queries)
+                )
         case "!watchlist":
             list = watchlist()
             msg = "site:query"
@@ -99,7 +115,7 @@ def watchlist():
     try:
         with sqlite3.connect("./products.db") as con:
             cur = con.cursor()
-            cur.execute("SELECT * FROM watchlist")
+            cur.execute("SELECT * FROM watchlist ORDER BY site")
             list = []
             for row in cur.fetchall():
                 list.append((row[0], row[1]))
