@@ -2,6 +2,7 @@ import os
 import discord
 import sqlite3
 import dotenv
+import subprocess
 
 dotenv.load_dotenv()
 token = str(os.getenv("TOKEN"))
@@ -73,6 +74,12 @@ async def on_message(message):
             for record in list:
                 msg = msg + "\n" + record[0] + ":" + record[1]
             await message.channel.send(msg)
+        case "!purgewatchlist":
+            purgewatchlist()
+            await message.channel.send("Purged watchlist")
+        case "!triggerwatch":
+            await message.channel.send("Triggering watch")
+            subprocess.run(["python", "./getproducts.py"])
         case _:
             print("Uh oh!")
 
@@ -123,6 +130,15 @@ def watchlist():
     except sqlite3.OperationalError as e:
         print(e)
     return []
+
+
+def purgewatchlist():
+    try:
+        with sqlite3.connect("./products.db") as con:
+            cur = con.cursor()
+            cur.execute("DELETE FROM watchlist")
+    except sqlite3.OperationalError as e:
+        print(e)
 
 
 client.run(token)
