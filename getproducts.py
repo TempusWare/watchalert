@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 import json
 import sqlite3
@@ -374,6 +375,7 @@ async def on_ready():
             embeds_chunks = list(divide_chunks(alerts, n))
             for chunk in embeds_chunks:
                 await channel.send(embeds=chunk)
+                time.sleep(0.1)
 
             await channel.send("Ended.")
 
