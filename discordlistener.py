@@ -23,13 +23,21 @@ async def on_message(message):
     if message.author == client.user:
         return
 
-    if message.author.id != 494030294723067904:
+    if (
+        message.author.id != 494030294723067904
+        and message.author.id != 457371383140450306
+    ):
+        return
+
+    if not message.content.startswith("!"):
         return
 
     if message.content.startswith("!hello"):
         await message.channel.send("Hello!")
 
     args = message.content.split(" ")
+
+    channel_id = message.channel.id
 
     match args[0]:
         case "!addwatch":
@@ -38,7 +46,7 @@ async def on_message(message):
             site = args[1].lower()
             query = " ".join(args[2:]).lower()
             print([site, query])
-            addwatch(site, query)
+            addwatch(site, query, channel_id)
             await message.channel.send(
                 "Added watch for site:" + site + " with query:" + query
             )
@@ -48,7 +56,7 @@ async def on_message(message):
             site = args[1].lower()
             query = " ".join(args[2:]).lower()
             print([site, query])
-            delwatch(site, query)
+            delwatch(site, query, channel_id)
             await message.channel.send(
                 "Removed watch for site:" + site + " with query:" + query
             )
@@ -61,15 +69,31 @@ async def on_message(message):
             if len(queries) > 1:
                 print([site, queries])
                 for q in queries:
-                    addwatch(site, q.strip())
+                    addwatch(site, q.strip(), channel_id)
                 await message.channel.send(
                     "Added watch for site:"
                     + site
                     + " with queries:"
                     + ",".join(queries)
                 )
+        case "!delwatches":
+            if len(args) < 3:
+                return
+            site = args[1].lower()
+            query = " ".join(args[2:]).lower()
+            queries = query.split(",")
+            if len(queries) > 1:
+                print([site, queries])
+                for q in queries:
+                    delwatch(site, q.strip(), channel_id)
+                await message.channel.send(
+                    "Removed watches for site:"
+                    + site
+                    + " with queries:"
+                    + ",".join(queries)
+                )
         case "!watchlist":
-            list = watchlist()
+            list = watchlist(channel_id)
             msg = "site:query"
             for record in list:
                 msg = msg + "\n" + record[0] + ":" + record[1]
@@ -81,19 +105,17 @@ async def on_message(message):
             await message.channel.send("Triggering watch")
             subprocess.run(["python", "./getproducts.py"])
         case _:
+            await message.channel.send("Not a command! Uh oh!")
             print("Uh oh!")
 
 
-def addwatch(site, query):
+def addwatch(site: str, query: str, channel_id: int):
     try:
         with sqlite3.connect("./products.db") as con:
             cur = con.cursor()
             cur.execute(
-                "INSERT OR IGNORE INTO watchlist VALUES(?, ?)",
-                (
-                    site,
-                    query,
-                ),
+                "INSERT OR IGNORE INTO watchlist VALUES(?, ?, ?)",
+                (site, query, channel_id),
             )
             con.commit()
     except sqlite3.OperationalError as e:
@@ -101,16 +123,13 @@ def addwatch(site, query):
     return
 
 
-def delwatch(site, query):
+def delwatch(site: str, query: str, channel_id: int):
     try:
         with sqlite3.connect("./products.db") as con:
             cur = con.cursor()
             cur.execute(
-                "DELETE FROM watchlist WHERE site=? AND query=?",
-                (
-                    site,
-                    query,
-                ),
+                "DELETE FROM watchlist WHERE site=? AND query=? AND channel=?",
+                (site, query, channel_id),
             )
             con.commit()
     except sqlite3.OperationalError as e:
@@ -118,11 +137,13 @@ def delwatch(site, query):
     return
 
 
-def watchlist():
+def watchlist(channel_id: int):
     try:
         with sqlite3.connect("./products.db") as con:
             cur = con.cursor()
-            cur.execute("SELECT * FROM watchlist ORDER BY site")
+            cur.execute(
+                "SELECT * FROM watchlist WHERE channel=? ORDER BY site", (channel_id,)
+            )
             list = []
             for row in cur.fetchall():
                 list.append((row[0], row[1]))
@@ -137,6 +158,7 @@ def purgewatchlist():
         with sqlite3.connect("./products.db") as con:
             cur = con.cursor()
             cur.execute("DELETE FROM watchlist")
+            con.commit()
     except sqlite3.OperationalError as e:
         print(e)
 

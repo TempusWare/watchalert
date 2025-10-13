@@ -23,7 +23,7 @@ colours = {
 }
 
 
-def scrape_cashconverters(query: str) -> list:
+def scrape_cashconverters(query: str, channel_id: int) -> list:
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0",
         "Accept": "application/json, text/plain, */*",
@@ -69,6 +69,7 @@ def scrape_cashconverters(query: str) -> list:
             i["StoreNameWithState"],
             today,
             "cashconverters",
+            channel_id,
         )
 
         print(item)
@@ -78,7 +79,7 @@ def scrape_cashconverters(query: str) -> list:
     return data_insert
 
 
-def scrape_worldofbooks(query: str) -> list:
+def scrape_worldofbooks(query: str, channel_id: int) -> list:
     encoded_query = urllib.parse.quote_plus(query)
 
     headers = {
@@ -127,6 +128,7 @@ def scrape_worldofbooks(query: str) -> list:
             " / ".join((author, bindingType, productType)),
             today,
             "worldofbooks",
+            channel_id,
         )
 
         print(item)
@@ -136,7 +138,7 @@ def scrape_worldofbooks(query: str) -> list:
     return data_insert
 
 
-def scrape_salvos(query: str) -> list:
+def scrape_salvos(query: str, channel_id: int) -> list:
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0",
         "Accept": "*/*",
@@ -187,6 +189,7 @@ def scrape_salvos(query: str) -> list:
             " / ".join(i["warehouseName"]),
             today,
             "salvos",
+            channel_id,
         )
 
         print(item)
@@ -196,7 +199,7 @@ def scrape_salvos(query: str) -> list:
     return data_insert
 
 
-def scrape_surugaya(query: str) -> list:
+def scrape_surugaya(query: str, channel_id: int) -> list:
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0",
         "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
@@ -256,6 +259,7 @@ def scrape_surugaya(query: str) -> list:
             i.find("p", class_="message").get_text().strip() or "",
             today,
             "surugaya",
+            channel_id,
         )
 
         print(item)
@@ -265,16 +269,16 @@ def scrape_surugaya(query: str) -> list:
     return data_insert
 
 
-def scrape_link(site: str, query: str) -> list:
+def scrape_link(site: str, query: str, channel_id: int) -> list:
     match site:
         case "cashconverters":
-            return scrape_cashconverters(query)
+            return scrape_cashconverters(query, channel_id)
         case "worldofbooks":
-            return scrape_worldofbooks(query)
+            return scrape_worldofbooks(query, channel_id)
         case "salvos":
-            return scrape_salvos(query)
+            return scrape_salvos(query, channel_id)
         case "surugaya":
-            return scrape_surugaya(query)
+            return scrape_surugaya(query, channel_id)
         case _:
             print("Uh oh!")
             return []
@@ -287,9 +291,9 @@ def watch():
             cur = con.cursor()
             cur.execute("SELECT * FROM watchlist")
             for row in cur.fetchall():
-                data = scrape_link(row[0], row[1])
+                data = scrape_link(row[0], row[1], row[2])
                 cur.executemany(
-                    "INSERT OR IGNORE INTO products VALUES(?, ?, ?, ?, ?, ?, ?, ?)",
+                    "INSERT OR IGNORE INTO products VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
                     data,
                 )
     except sqlite3.OperationalError as e:
@@ -312,8 +316,7 @@ con = sqlite3.connect("./products.db")
 cur = con.cursor()
 cur.execute("SELECT * FROM products WHERE date=?", (today,))
 
-embeds = []
-
+embeds = {}
 
 # Fetch and print each row
 print("New products:\n")
@@ -323,7 +326,9 @@ for row in cur.fetchall():
     price = row[3]
     image = row[4]
     notes = row[5]
+    # date = row[6]
     site = row[7]
+    channel = row[8]
 
     colour = site if colours[site] is not None else "default"
 
@@ -334,14 +339,17 @@ for row in cur.fetchall():
     if type(image) == str and len(image) > 1:
         embed.set_thumbnail(url=image)
 
-    embeds.append(embed)
+    if str(channel) not in embeds:
+        embeds[str(channel)] = []
+
+    embeds[str(channel)].append(embed)
 
 con.close()
 
 # How many embeds per chunk
 n = 10
 
-embeds_chunks = list(divide_chunks(embeds, n))
+# embeds_chunks = list(divide_chunks(embeds, n))
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -352,17 +360,22 @@ client = discord.Client(intents=intents)
 @client.event
 async def on_ready():
     print(f"We have logged in as {client.user}")
-    channel = client.get_channel(1283193276156874876)
 
-    if len(embeds) < 1:
-        await channel.send("No new results today.")
-    else:
-        await channel.send("Printing today's results (" + str(len(embeds)) + ")")
+    for key in embeds.keys():
+        channel = client.get_channel(int(key))
 
-        for chunk in embeds_chunks:
-            await channel.send(embeds=chunk)
+        alerts = embeds[str(key)]
 
-        await channel.send("Ended.")
+        if len(alerts) < 1:
+            await channel.send("No new results today.")
+        else:
+            await channel.send("Printing today's results (" + str(len(alerts)) + ")")
+
+            embeds_chunks = list(divide_chunks(alerts, n))
+            for chunk in embeds_chunks:
+                await channel.send(embeds=chunk)
+
+            await channel.send("Ended.")
 
     await client.close()
     print("Bot has disconnected.")
