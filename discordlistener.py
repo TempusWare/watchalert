@@ -104,6 +104,15 @@ async def on_message(message):
         case "!triggerwatch":
             await message.channel.send("Triggering watch")
             subprocess.run(["python", "./getproducts.py"])
+        case "!gethistory":
+            if len(args) < 2:
+                return
+            url = args[1]
+            history = gethistory(channel_id, url)
+            msg = "history:" + url
+            for record in history:
+                msg = msg + "\n" + str(record[0]) + " : " + str(record[1])
+            await message.channel.send(msg)
         case _:
             await message.channel.send("Not a command! Uh oh!")
             print("Uh oh!")
@@ -161,6 +170,23 @@ def purgewatchlist():
             con.commit()
     except sqlite3.OperationalError as e:
         print(e)
+
+
+def gethistory(channel_id: int, url: str):
+    try:
+        with sqlite3.connect("./products.db") as con:
+            cur = con.cursor()
+            cur.execute(
+                "SELECT date, price FROM products WHERE url=? ORDER BY date",
+                (url,),
+            )
+            list = []
+            for row in cur.fetchall():
+                list.append((row[0], row[1]))
+            return list
+    except sqlite3.OperationalError as e:
+        print(e)
+    return []
 
 
 client.run(token)
