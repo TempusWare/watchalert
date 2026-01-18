@@ -373,7 +373,7 @@ async def on_ready():
             firstmsg = await channel.send(
                 "Printing today's results (" + str(len(alerts)) + ") [" + today + "]"
             )
-            await firstmsg.pin()
+            # await firstmsg.pin()
 
             embeds_chunks = list(divide_chunks(alerts, n))
             for chunk in embeds_chunks:
