@@ -20,6 +20,7 @@ colours = {
     "salvos": discord.Colour.from_rgb(255, 40, 62),
     "worldofbooks": discord.Colour.from_rgb(48, 132, 74),
     "surugaya": discord.Colour.from_rgb(29, 32, 136),
+    "ebgames": discord.Colour.from_rgb(248, 65, 71),
     "default": discord.Colour.from_rgb(255, 255, 255),
 }
 
@@ -270,6 +271,64 @@ def scrape_surugaya(query: str, channel_id: int) -> list:
     return data_insert
 
 
+def scrape_ebgames(query: str, channel_id: int) -> list:
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0",
+        "Accept": "*/*",
+        "Accept-Language": "en-US,en;q=0.9",
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        "Referer": "https://www.ebgames.com.au/search?q=DC+Comics+-+Superman+2025+-+Superman+Shield+Moulded+Mini-Backpack",
+        "Sec-GPC": "1",
+        "Alt-Used": "www.ebgames.com.au",
+        "Connection": "keep-alive",
+        "Sec-Fetch-Dest": "empty",
+        "Sec-Fetch-Mode": "cors",
+        "Sec-Fetch-Site": "same-origin",
+        "Priority": "u=4",
+        # Requests doesn't support trailers
+        # 'TE': 'trailers',
+    }
+
+    params = {
+        "q": query,
+        "sort": "releasedate",
+        "order": "desc",
+    }
+
+    response = requests.get(
+        "https://www.ebgames.com.au/search/query",
+        params=params,
+        headers=headers,
+    )
+
+    data_response = response.text
+    data_parsed = json.loads(data_response)
+    items = data_parsed["results"]
+
+    data_insert = []
+
+    for i in items:
+        price = i["promotionPrice"] or i["price"]
+        note = "promotion" if "promotionPrice" in i else ""
+        item = (
+            i["sku"],
+            i["title"],
+            i["productUrlAbsolute"],
+            price,
+            "https:" + i["imageUrl"],
+            note,
+            today,
+            "ebgames",
+            channel_id,
+        )
+
+        print(item)
+
+        data_insert.append(item)
+
+    return data_insert
+
+
 def scrape_link(site: str, query: str, channel_id: int) -> list:
     match site:
         case "cashconverters":
@@ -280,9 +339,46 @@ def scrape_link(site: str, query: str, channel_id: int) -> list:
             return scrape_salvos(query, channel_id)
         case "surugaya":
             return scrape_surugaya(query, channel_id)
+        # case "ebgames":
+        #     return scrape_ebgames(query, channel_id)
         case _:
             print("Uh oh!")
             return []
+
+
+def add_fault(channel_id: int):
+    try:
+        with sqlite3.connect("./products.db") as con:
+            cur = con.cursor()
+            cur.execute(
+                "INSERT OR IGNORE INTO faults VALUES(?)",
+                (channel_id,),
+            )
+            con.commit()
+    except sqlite3.OperationalError as e:
+        print(e)
+    return
+
+
+def clear_faults():
+    try:
+        with sqlite3.connect("./products.db") as con:
+            cur = con.cursor()
+            cur.execute("SELECT * FROM faults")
+            for row in cur.fetchall():
+                channel_id = row[0]
+                cur.execute(
+                    "DELETE FROM watchlist WHERE channel=?",
+                    (channel_id,),
+                )
+                cur.execute(
+                    "DELETE FROM faults WHERE channel=?",
+                    (channel_id,),
+                )
+                con.commit()
+    except sqlite3.OperationalError as e:
+        print(e)
+    return
 
 
 # Use watchlist
@@ -292,11 +388,14 @@ def watch():
             cur = con.cursor()
             cur.execute("SELECT * FROM watchlist")
             for row in cur.fetchall():
-                data = scrape_link(row[0], row[1], row[2])
-                cur.executemany(
-                    "INSERT OR IGNORE INTO products VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    data,
-                )
+                try:
+                    data = scrape_link(row[0], row[1], row[2])
+                    cur.executemany(
+                        "INSERT OR IGNORE INTO products VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        data,
+                    )
+                except sqlite3.OperationalError as e:
+                    print(e)
     except sqlite3.OperationalError as e:
         print(e)
 
@@ -367,23 +466,34 @@ async def on_ready():
 
         alerts = embeds[str(key)]
 
-        if len(alerts) < 1:
-            await channel.send("No new results today.")
-        else:
-            firstmsg = await channel.send(
-                "Printing today's results (" + str(len(alerts)) + ") [" + today + "]"
-            )
-            # await firstmsg.pin()
+        try:
+            if len(alerts) < 1:
+                await channel.send("No new results today.")
+            else:
+                firstmsg = await channel.send(
+                    "Printing today's results ("
+                    + str(len(alerts))
+                    + ") ["
+                    + today
+                    + "]"
+                )
+                # await firstmsg.pin()
 
-            embeds_chunks = list(divide_chunks(alerts, n))
-            for chunk in embeds_chunks:
-                await channel.send(embeds=chunk)
-                time.sleep(0.1)
+                embeds_chunks = list(divide_chunks(alerts, n))
+                for chunk in embeds_chunks:
+                    await channel.send(embeds=chunk)
+                    time.sleep(0.1)
 
-            await channel.send("Ended.")
+                await channel.send("Ended.")
+        except:
+            print("Error with " + str(key))
+            add_fault(int(key))
 
     await client.close()
     print("Bot has disconnected.")
+
+    print("Clearing faults")
+    clear_faults()
 
 
 client.run(token)

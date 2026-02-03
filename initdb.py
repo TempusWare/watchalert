@@ -8,4 +8,5 @@ cur.execute(
 cur.execute(
     "CREATE TABLE IF NOT EXISTS watchlist(site, query, channel, PRIMARY KEY (site, query, channel))"
 )
+cur.execute("CREATE TABLE IF NOT EXISTS faults(channel, PRIMARY KEY (channel))")
 con.close()
