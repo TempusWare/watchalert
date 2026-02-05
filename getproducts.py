@@ -225,6 +225,26 @@ def scrape_surugaya(query: str, channel_id: int) -> list:
         # "in_stock": "t",
     }
 
+    # Check if searching by special parameters
+    args = query.split("?")
+    if len(args) > 1:
+        # Resolve keyword
+        params["keyword"] = args[0]
+
+        # Parse special parameters and add to params
+        specials = args[1].split("&")
+        for s in specials:
+            v = s.split("=")
+            keyname = v[0].lower()
+            value = v[1]
+
+            params[keyname] = value
+
+        # Special case for CREATOR label is actually person_name
+        if "creator" in params:
+            params["person_name"] = params["creator"]
+            params.pop("creator")
+
     response = requests.get(
         "https://www.suruga-ya.com/en/products",
         params=params,
