@@ -60,6 +60,26 @@ async def on_message(message):
             await message.channel.send(
                 "Removed watch for site:" + site + " with query:" + query
             )
+        case "!addwatchc":
+            if len(args) < 3:
+                return
+            site = args[1].lower()
+            query = " ".join(args[2:])
+            print([site, query])
+            addwatch(site, query, channel_id)
+            await message.channel.send(
+                "Added case sensitive watch for site:" + site + " with query:" + query
+            )
+        case "!delwatchc":
+            if len(args) < 2:
+                return
+            site = args[1].lower()
+            query = " ".join(args[2:])
+            print([site, query])
+            delwatch(site, query, channel_id)
+            await message.channel.send(
+                "Removed case sensitive watch for site:" + site + " with query:" + query
+            )
         case "!addwatches":
             if len(args) < 3:
                 return
