@@ -119,7 +119,7 @@ async def on_message(message):
                 msg = msg + "\n" + record[0] + ":" + record[1]
             await message.channel.send(msg)
         case "!purgewatchlist":
-            purgewatchlist()
+            purgewatchlist(channel_id)
             await message.channel.send("Purged watchlist")
         case "!triggerwatch":
             await message.channel.send("Triggering watch")
@@ -182,11 +182,11 @@ def watchlist(channel_id: int):
     return []
 
 
-def purgewatchlist():
+def purgewatchlist(channel_id: int):
     try:
         with sqlite3.connect("./products.db") as con:
             cur = con.cursor()
-            cur.execute("DELETE FROM watchlist")
+            cur.execute("DELETE FROM watchlist WHERE channel=?", (channel_id,))
             con.commit()
     except sqlite3.OperationalError as e:
         print(e)
