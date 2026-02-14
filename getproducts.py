@@ -28,15 +28,6 @@ colours = {
 }
 
 
-# URL validator from https://stackoverflow.com/a/38020041
-def uri_validator(x):
-    try:
-        result = urllib.parse.urlparse(x)
-        return all([result.scheme, result.netloc])
-    except AttributeError:
-        return False
-
-
 def scrape_cashconverters(query: str, channel_id: int) -> list:
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:143.0) Gecko/20100101 Firefox/143.0",
@@ -418,14 +409,6 @@ def scrape_booktopia(query: str, channel_id: int) -> list:
 
 def scrape_cex_product(query: str, channel_id: int) -> list:
     data_insert = []
-
-    # Early end if URL is not valid
-    if not uri_validator(query) or "webuy" not in query:
-        print(f"Error with cex query {query}")
-        return data_insert
-
-    # Extract id from query
-    query = urllib.parse.parse_qs(urllib.parse.urlparse(query).query)["id"][0]
 
     # Get product detail
     product_headers = {

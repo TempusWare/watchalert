@@ -3,6 +3,7 @@ import discord
 import sqlite3
 import dotenv
 import subprocess
+from urllib.parse import parse_qs, urlparse
 
 dotenv.load_dotenv()
 token = str(os.getenv("TOKEN"))
@@ -90,12 +91,11 @@ async def on_message(message):
                 print([site, queries])
                 for q in queries:
                     addwatch(site, q.strip(), channel_id)
-                await message.channel.send(
-                    "Added watch for site:"
-                    + site
-                    + " with queries:\n - "
-                    + "\n - ".join(queries)
-                )
+                msg = f"Added watches for site:{site} with queries:\n - {'\n - '.join(queries)}"
+                if len(msg) <= 2000:
+                    await message.channel.send(msg)
+                else:
+                    await message.channel.send("Message too long to send")
         case "!delwatches":
             if len(args) < 3:
                 return
@@ -106,18 +106,20 @@ async def on_message(message):
                 print([site, queries])
                 for q in queries:
                     delwatch(site, q.strip(), channel_id)
-                await message.channel.send(
-                    "Removed watches for site:"
-                    + site
-                    + " with queries:\n - "
-                    + "\n - ".join(queries)
-                )
+                msg = f"Removed watches for site:{site} with queries:\n - {'\n - '.join(queries)}"
+                if len(msg) <= 2000:
+                    await message.channel.send(msg)
+                else:
+                    await message.channel.send("Message too long to send")
         case "!watchlist":
             items = watchlist(channel_id)
             msg = "site:query"
             for record in items:
                 msg = msg + "\n" + record[0] + ":" + record[1]
-            await message.channel.send(msg)
+            if len(msg) <= 2000:
+                await message.channel.send(msg)
+            else:
+                await message.channel.send("Message too long to send")
         case "!purgewatchlist":
             purgewatchlist(channel_id)
             await message.channel.send("Purged watchlist")
@@ -138,7 +140,26 @@ async def on_message(message):
             print("Uh oh!")
 
 
+# URL validator from https://stackoverflow.com/a/38020041
+def uri_validator(x):
+    try:
+        result = urlparse(x)
+        return all([result.scheme, result.netloc])
+    except AttributeError:
+        return False
+
+
 def addwatch(site: str, query: str, channel_id: int):
+    # extract id from cex queries
+    if site == "cex":
+        # validate cex url
+        if not uri_validator(query) or "webuy" not in query:
+            print(f"error with cex query {query}")
+            return
+        try:
+            query = parse_qs(urlparse(query).query)["id"][0]
+        except:
+            return
     try:
         with sqlite3.connect("./products.db") as con:
             cur = con.cursor()
