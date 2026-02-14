@@ -21,6 +21,7 @@ colours = {
     "worldofbooks": discord.Colour.from_rgb(48, 132, 74),
     "surugaya": discord.Colour.from_rgb(29, 32, 136),
     "ebgames": discord.Colour.from_rgb(248, 65, 71),
+    "booktopia": discord.Colour.from_rgb(35, 94, 57),
     "default": discord.Colour.from_rgb(255, 255, 255),
 }
 
@@ -349,6 +350,61 @@ def scrape_ebgames(query: str, channel_id: int) -> list:
     return data_insert
 
 
+def scrape_booktopia(query: str, channel_id: int) -> list:
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Referer': 'https://www.booktopia.com.au/search?keywords=doctor%20who&productType=917504&pn=1',
+        'x-nextjs-data': '1',
+        'Sec-GPC': '1',
+        'Alt-Used': 'www.booktopia.com.au',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'Priority': 'u=0',
+    }
+
+    params = {
+        'keywords': query,
+        'productType': '917504',
+        'pn': '1',
+    }
+
+    response = requests.get(
+        'https://www.booktopia.com.au/_next/data/1uqt6obZg1LSgf_BaxyCb/search.json',
+        params=params,
+        headers=headers,
+    )
+
+    data_response = response.text
+    data_parsed = json.loads(data_response)
+
+    items = data_parsed["pageProps"]["searchData"]["pagination"]["products"]
+
+    data_insert = []
+
+    for i in items:
+        item = (
+            i["code"],
+            f"{i["displayName"]}: {i["subtitle"]}" if i["subtitle"] is not None else i["displayName"],
+            f"https://www.booktopia.com.au/{i["productUrl"]}",
+            i["salePrice"],
+            i["imageUrl"],
+            f"{i["bindingFormat"]}. RRP:{i["retailPrice"]}",
+            today,
+            "booktopia",
+            channel_id,
+        )
+
+        print(item)
+
+        data_insert.append(item)
+
+    return data_insert
+
 def scrape_link(site: str, query: str, channel_id: int) -> list:
     match site:
         case "cashconverters":
@@ -361,8 +417,10 @@ def scrape_link(site: str, query: str, channel_id: int) -> list:
             return scrape_surugaya(query, channel_id)
         # case "ebgames":
         #     return scrape_ebgames(query, channel_id)
+        case "booktopia":
+            return scrape_booktopia(query, channel_id)
         case _:
-            print("Uh oh!")
+            print(f"Uh oh! Can't scrape {site}, {query}, {channel_id}")
             return []
 
 
@@ -419,6 +477,8 @@ def watch():
     except sqlite3.OperationalError as e:
         print(e)
 
+# print(scrape_link("booktopia", "adventure time", "0"))
+# quit()
 
 watch()
 

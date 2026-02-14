@@ -93,8 +93,8 @@ async def on_message(message):
                 await message.channel.send(
                     "Added watch for site:"
                     + site
-                    + " with queries:"
-                    + ",".join(queries)
+                    + " with queries:\n - "
+                    + "\n - ".join(queries)
                 )
         case "!delwatches":
             if len(args) < 3:
@@ -109,13 +109,13 @@ async def on_message(message):
                 await message.channel.send(
                     "Removed watches for site:"
                     + site
-                    + " with queries:"
-                    + ",".join(queries)
+                    + " with queries:\n - "
+                    + "\n - ".join(queries)
                 )
         case "!watchlist":
-            list = watchlist(channel_id)
+            items = watchlist(channel_id)
             msg = "site:query"
-            for record in list:
+            for record in items:
                 msg = msg + "\n" + record[0] + ":" + record[1]
             await message.channel.send(msg)
         case "!purgewatchlist":
