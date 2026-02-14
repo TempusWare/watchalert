@@ -14,6 +14,7 @@ dotenv.load_dotenv()
 token = str(os.getenv("TOKEN"))
 
 today = datetime.today().strftime("%Y-%m-%d %H:%M:%S")
+today_simple = datetime.today().strftime("%Y%m%d")
 
 colours = {
     "cashconverters": discord.Colour.from_rgb(255, 217, 18),
@@ -22,8 +23,18 @@ colours = {
     "surugaya": discord.Colour.from_rgb(29, 32, 136),
     "ebgames": discord.Colour.from_rgb(248, 65, 71),
     "booktopia": discord.Colour.from_rgb(35, 94, 57),
+    "cex": discord.Colour.from_rgb(226, 10, 3),
     "default": discord.Colour.from_rgb(255, 255, 255),
 }
+
+
+# URL validator from https://stackoverflow.com/a/38020041
+def uri_validator(x):
+    try:
+        result = urllib.parse.urlparse(x)
+        return all([result.scheme, result.netloc])
+    except AttributeError:
+        return False
 
 
 def scrape_cashconverters(query: str, channel_id: int) -> list:
@@ -405,6 +416,60 @@ def scrape_booktopia(query: str, channel_id: int) -> list:
 
     return data_insert
 
+def scrape_cex_product(query: str, channel_id: int) -> list:
+    data_insert = []
+
+    # Early end if URL is not valid
+    if not uri_validator(query) or "webuy" not in query:
+        print(f"Error with cex query {query}")
+        return data_insert
+
+    # Extract id from query
+    query = urllib.parse.parse_qs(urllib.parse.urlparse(query).query)["id"][0]
+
+    # Get product detail
+    product_headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0',
+        'Accept': 'application/json, text/plain, */*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Referer': 'https://au.webuy.com/',
+        'Origin': 'https://au.webuy.com',
+        'Sec-GPC': '1',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'cross-site',
+        'Connection': 'keep-alive',
+    }
+
+    product_response = requests.get(f'https://wss2.cex.au.webuy.io/v3/boxes/{query}/detail', headers=product_headers)
+    product_data = product_response.text
+    product_parsed = json.loads(product_data)
+
+    details = product_parsed["response"]["data"]["boxDetails"][0]
+
+    # If out of stock, return empty
+    if details["outOfStock"] == 1:
+        print(f"{query} Out of stock")
+        return data_insert
+
+    item = (
+        details["boxId"],
+        details["boxName"],
+        f"https://au.webuy.com/product-detail?id={details["boxId"]}#{today_simple}", # Append date to end to bypass unique row
+        details["sellPrice"],
+        details["imageUrls"]["large"].replace(" ", "%20"),
+        f"1st:{details["firstPrice"]}, prev:{details["previousPrice"]}, stock:{details["collectionQuantity"]}",
+        today,
+        "cex",
+        channel_id,
+    )
+    print(item)
+
+    data_insert.append(item)
+
+    return data_insert
+
 def scrape_link(site: str, query: str, channel_id: int) -> list:
     match site:
         case "cashconverters":
@@ -419,6 +484,8 @@ def scrape_link(site: str, query: str, channel_id: int) -> list:
         #     return scrape_ebgames(query, channel_id)
         case "booktopia":
             return scrape_booktopia(query, channel_id)
+        case "cex":
+            return scrape_cex_product(query, channel_id)
         case _:
             print(f"Uh oh! Can't scrape {site}, {query}, {channel_id}")
             return []
@@ -476,9 +543,6 @@ def watch():
                     print(e)
     except sqlite3.OperationalError as e:
         print(e)
-
-# print(scrape_link("booktopia", "adventure time", "0"))
-# quit()
 
 watch()
 
