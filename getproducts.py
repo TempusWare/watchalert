@@ -8,13 +8,15 @@ from datetime import datetime
 import discord
 import dotenv
 from bs4 import BeautifulSoup
+import sys
 
 
 dotenv.load_dotenv()
 token = str(os.getenv("TOKEN"))
 
-today = datetime.today().strftime("%Y-%m-%d %H:%M:%S")
-today_simple = datetime.today().strftime("%Y%m%d")
+today_dt = datetime.today()
+today = today_dt.strftime("%Y-%m-%d %H:%M:%S")
+today_simple = today_dt.strftime("%Y%m%d")
 
 colours = {
     "cashconverters": discord.Colour.from_rgb(255, 217, 18),
@@ -24,8 +26,31 @@ colours = {
     "ebgames": discord.Colour.from_rgb(248, 65, 71),
     "booktopia": discord.Colour.from_rgb(35, 94, 57),
     "cex": discord.Colour.from_rgb(226, 10, 3),
+    "comicsetcdirect": discord.Colour.from_rgb(0, 173, 220),
+    "bookgrocer": discord.Colour.from_rgb(6, 102, 20),
     "default": discord.Colour.from_rgb(255, 255, 255),
 }
+
+def get_apikey(site: str):
+    key = ''
+    try:
+        with sqlite3.connect("./products.db") as con:
+            cur = con.cursor()
+            try:
+                cur.execute(f"SELECT key FROM apikeys WHERE ROWID IN ( SELECT max( ROWID ) FROM apikeys WHERE site = '{site}' )")
+                key = next(cur, [None])[0]
+            except sqlite3.OperationalError as e:
+                print(e)
+    except sqlite3.OperationalError as e:
+        print(e)
+    return key
+
+booktopiaAPI = get_apikey('booktopia')
+comicsetcDay = get_apikey('comicsetc') or '01'
+
+print([booktopiaAPI, comicsetcDay])
+
+time.sleep(1)
 
 
 def scrape_cashconverters(query: str, channel_id: int) -> list:
@@ -375,8 +400,10 @@ def scrape_booktopia(query: str, channel_id: int) -> list:
         'pn': '1',
     }
 
+    print(f"Using key: {booktopiaAPI}")
+
     response = requests.get(
-        'https://www.booktopia.com.au/_next/data/1uqt6obZg1LSgf_BaxyCb/search.json',
+        f'https://www.booktopia.com.au/_next/data/{booktopiaAPI}/search.json',
         params=params,
         headers=headers,
     )
@@ -384,9 +411,14 @@ def scrape_booktopia(query: str, channel_id: int) -> list:
     data_response = response.text
     data_parsed = json.loads(data_response)
 
+    data_insert = []
+
+    # If empty dictionary (probably cause the scrape failed), return empty
+    if not bool(data_parsed):
+        return data_insert
+
     items = data_parsed["pageProps"]["searchData"]["pagination"]["products"]
 
-    data_insert = []
 
     for i in items:
         item = (
@@ -453,6 +485,152 @@ def scrape_cex_product(query: str, channel_id: int) -> list:
 
     return data_insert
 
+
+def scrape_comicsetcdirect(query: str, channel_id: int) -> list:
+    data_insert = []
+
+    # add condition - only trigger if it's the define comicsetc day (presumably the 1st of the month).
+    if today_dt.strftime("%d") != comicsetcDay:
+        return data_insert
+
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Sec-GPC': '1',
+        'Alt-Used': 'comicsetcdirect.com.au',
+        'Connection': 'keep-alive',
+        'Referer': 'https://comicsetcdirect.com.au/search?q=doctor%20who',
+        'Upgrade-Insecure-Requests': '1',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'same-origin',
+        'Sec-Fetch-User': '?1',
+        'Priority': 'u=0, i',
+        # Requests doesn't support trailers
+        # 'TE': 'trailers',
+    }
+
+    params = {
+        'q': query,
+        'page': 1
+    }
+
+    end_of_pages = False
+
+    while not end_of_pages:
+        response = requests.get('https://comicsetcdirect.com.au/search', params=params, headers=headers)
+
+        data_response = response.text
+
+        soup = BeautifulSoup(data_response, "html.parser")
+
+        for i in soup.select("article.product-item"):
+            product_dump = i.find("script").get_text().strip()
+            product_data = json.loads(product_dump)
+            d = product_data
+
+            item = (
+                d["handle"],
+                d["title"],
+                f"https://comicsetcdirect.com.au/products/{d["handle"]}",
+                f"{d["price"]/100} ~~{d["compare_at_price"]/100}~~" if d["compare_at_price"] is not None else d["price"]/100,
+                f"https:{d["featured_image"]}" if d["featured_image"] is not None else "",
+                d["tags"][4],
+                today,
+                "comicsetcdirect",
+                channel_id,
+            )
+
+            print(item)
+
+            data_insert.append(item)
+
+        # If there are more pages
+        if soup.find("span", class_="next"):
+            params["page"] = params["page"] + 1
+            print("more pages")
+            time.sleep(0.5)
+        else:
+            print("no more pages")
+            end_of_pages = True
+        
+
+    return data_insert
+
+
+def scrape_bookgrocer(query: str, channel_id: int) -> list:
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:147.0) Gecko/20100101 Firefox/147.0',
+        'Accept': '*/*',
+        'Accept-Language': 'en-US,en;q=0.9',
+        # 'Accept-Encoding': 'gzip, deflate, br, zstd',
+        'Referer': 'https://bookgrocer.com/search/?options[prefix]=last&options[unavailable_products]=show&q=batman&type=product&sort_by=relevance',
+        'Cache-Control': 'no-cache',
+        'Sec-GPC': '1',
+        'Alt-Used': 'bookgrocer.com',
+        'Connection': 'keep-alive',
+        'Sec-Fetch-Dest': 'empty',
+        'Sec-Fetch-Mode': 'cors',
+        'Sec-Fetch-Site': 'same-origin',
+        'Priority': 'u=0',
+        # Requests doesn't support trailers
+        # 'TE': 'trailers',
+    }
+
+    params = {
+        'options[prefix]': 'last',
+        'options[unavailable_products]': 'show',
+        'page': 1,
+        'q': query,
+        'sort_by': 'relevance',
+        'type': 'product',
+        'section_id': 'template--19266741108955__main',
+    }
+
+    data_insert = []
+
+    end_of_pages = False
+
+    while not end_of_pages:
+        response = requests.get('https://bookgrocer.com/search', params=params, headers=headers)
+        data_response = response.text
+        soup = BeautifulSoup(data_response, "html.parser")
+
+        for i in soup.select("div.t4s-product"):
+            priceDiv = i.find("div", class_="t4s-product-price")
+            link = i.find("a")["href"]
+
+            item = (
+                link.split("/")[-1].split("?")[0],
+                i.find("h3", class_="t4s-product-title").get_text().strip(),
+                f"https://bookgrocer.com{link}",
+                f"{priceDiv.find("ins").get_text().strip()} ~~{priceDiv.find("del").get_text().strip()}~~" if priceDiv.find("ins") and priceDiv.find("del") else priceDiv.get_text().strip(),
+                f"https:{i.find("div", class_="t4s-product-img").find("noscript").find("img")["src"]}",
+                i.find("a", class_="t4s-product-type").get_text().strip() or "",
+                today,
+                "bookgrocer",
+                channel_id,
+            )
+
+            print(item)
+
+            data_insert.append(item)
+
+        # If there are more pages
+        if soup.find("a", {"aria-label": "Next"}):
+            params["page"] = params["page"] + 1
+            print("more pages")
+            time.sleep(0.5)
+        else:
+            print("no more pages")
+            end_of_pages = True
+
+    return data_insert
+
+
+
 def scrape_link(site: str, query: str, channel_id: int) -> list:
     match site:
         case "cashconverters":
@@ -469,6 +647,10 @@ def scrape_link(site: str, query: str, channel_id: int) -> list:
             return scrape_booktopia(query, channel_id)
         case "cex":
             return scrape_cex_product(query, channel_id)
+        case "comicsetcdirect":
+            return scrape_comicsetcdirect(query, channel_id)
+        case "bookgrocer":
+            return scrape_bookgrocer(query, channel_id)
         case _:
             print(f"Uh oh! Can't scrape {site}, {query}, {channel_id}")
             return []
@@ -510,11 +692,19 @@ def clear_faults():
 
 
 # Use watchlist
-def watch():
+def watch(*args):
     try:
         with sqlite3.connect("./products.db") as con:
             cur = con.cursor()
-            cur.execute("SELECT * FROM watchlist")
+            if args[0] == "all":
+                cur.execute("SELECT * FROM watchlist")
+                print("select all")
+            elif args[0] == "channel":
+                cur.execute("SELECT * FROM watchlist WHERE channel=?", (args[1],))
+                print(f"select channel {args[1]}")
+            else:
+                print("do nothin")
+                return
             for row in cur.fetchall():
                 try:
                     data = scrape_link(row[0], row[1], row[2])
@@ -527,7 +717,19 @@ def watch():
     except sqlite3.OperationalError as e:
         print(e)
 
-watch()
+# print(scrape_link("comicsetcdirect", "doctor who", "0"))
+
+# quit()
+
+if len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] == "all"):
+    print("triggering all")
+    watch("all")
+elif len(sys.argv) == 3 and sys.argv[1] == "channel":
+    print(f"triggering channel {sys.argv[2]}")
+    watch("channel", sys.argv[2])
+else:
+    print("Dunno how we got here. Triggering all!")
+    watch("all")
 
 ### Send to Discord
 
@@ -609,7 +811,7 @@ async def on_ready():
                 embeds_chunks = list(divide_chunks(alerts, n))
                 for chunk in embeds_chunks:
                     await channel.send(embeds=chunk)
-                    time.sleep(0.1)
+                    time.sleep(0.5)
 
                 await channel.send("Ended.")
         except:

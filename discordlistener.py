@@ -124,8 +124,12 @@ async def on_message(message):
             purgewatchlist(channel_id)
             await message.channel.send("Purged watchlist")
         case "!triggerwatch":
-            await message.channel.send("Triggering watch")
-            subprocess.run(["python", "./getproducts.py"])
+            if len(args) == 2 and args[1] == "all":
+                await message.channel.send("Triggering global watch")
+                subprocess.run(["./venv/Scripts/python", "./getproducts.py", "all"])
+            else:
+                await message.channel.send(f"Triggering watch for this channel {channel_id}")
+                subprocess.run(["./venv/Scripts/python", "./getproducts.py", "channel", str(channel_id)])
         case "!gethistory":
             if len(args) < 2:
                 return
@@ -135,6 +139,25 @@ async def on_message(message):
             for record in history:
                 msg = msg + "\n" + str(record[0]) + " : " + str(record[1])
             await message.channel.send(msg)
+        case "!setapikey":
+            if len(args) < 3:
+                return
+            site = args[1].lower()
+            key = args[2]
+            print([site, key])
+            setapikey(site, key)
+            await message.channel.send(
+                "Set API key for site:" + site + " with key:" + key
+            )
+        case "!getapikeys":
+            items = getapikeys()
+            msg = "site:key"
+            for record in items:
+                msg = msg + "\n" + record[0] + ":" + record[1]
+            if len(msg) <= 2000:
+                await message.channel.send(msg)
+            else:
+                await message.channel.send("Message too long to send")
         case _:
             await message.channel.send("Not a command! Uh oh!")
             print("Uh oh!")
@@ -220,6 +243,36 @@ def gethistory(channel_id: int, url: str):
             cur.execute(
                 "SELECT date, price FROM products WHERE url=? ORDER BY date",
                 (url,),
+            )
+            list = []
+            for row in cur.fetchall():
+                list.append((row[0], row[1]))
+            return list
+    except sqlite3.OperationalError as e:
+        print(e)
+    return []
+
+
+def setapikey(site: str, key: str):
+    try:
+        with sqlite3.connect("./products.db") as con:
+            cur = con.cursor()
+            cur.execute(
+                "INSERT OR IGNORE INTO apikeys VALUES(?, ?)",
+                (site, key),
+            )
+            con.commit()
+    except sqlite3.OperationalError as e:
+        print(e)
+    return
+
+
+def getapikeys():
+    try:
+        with sqlite3.connect("./products.db") as con:
+            cur = con.cursor()
+            cur.execute(
+                "SELECT * FROM apikeys ORDER BY ROWID DESC LIMIT 10"
             )
             list = []
             for row in cur.fetchall():
