@@ -605,10 +605,10 @@ def scrape_bookgrocer(query: str, channel_id: int) -> list:
             item = (
                 link.split("/")[-1].split("?")[0],
                 i.find("h3", class_="t4s-product-title").get_text().strip(),
-                f"https://bookgrocer.com{link}",
+                f"https://bookgrocer.com{link[:link.index("?")]}",
                 f"{priceDiv.find("ins").get_text().strip()} ~~{priceDiv.find("del").get_text().strip()}~~" if priceDiv.find("ins") and priceDiv.find("del") else priceDiv.get_text().strip(),
                 f"https:{i.find("div", class_="t4s-product-img").find("noscript").find("img")["src"]}",
-                i.find("a", class_="t4s-product-type").get_text().strip() or "",
+                i.find("a", class_="t4s-product-type").get_text().strip() if i.find("a", class_="t4s-product-type") else "",
                 today,
                 "bookgrocer",
                 channel_id,
@@ -621,7 +621,7 @@ def scrape_bookgrocer(query: str, channel_id: int) -> list:
         # If there are more pages
         if soup.find("a", {"aria-label": "Next"}):
             params["page"] = params["page"] + 1
-            print("more pages")
+            print(f"more pages. Page:{params['page']}")
             time.sleep(0.5)
         else:
             print("no more pages")
@@ -703,8 +703,8 @@ def watch(*args):
                 cur.execute("SELECT * FROM watchlist WHERE channel=?", (args[1],))
                 print(f"select channel {args[1]}")
             else:
-                print("do nothin")
-                return
+                cur.execute("SELECT * FROM watchlist")
+                print("doing it anyway")
             for row in cur.fetchall():
                 try:
                     data = scrape_link(row[0], row[1], row[2])
@@ -717,7 +717,7 @@ def watch(*args):
     except sqlite3.OperationalError as e:
         print(e)
 
-# print(scrape_link("comicsetcdirect", "doctor who", "0"))
+# print(scrape_link("bookgrocer", "doctor who", "0"))
 
 # quit()
 
